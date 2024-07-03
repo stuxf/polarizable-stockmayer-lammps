@@ -1,0 +1,60 @@
+LAMMPS (2 Aug 2023 - Update 2)
+OMP_NUM_THREADS environment is not set. Defaulting to 1 thread. (src/comm.cpp:98)
+  using 1 OpenMP thread(s) per MPI task
+# Initialize the non-polarizable data file
+# This file will then be converted into a polarizable data file
+# It will be converted via polarizer.py, from DRUDE tools
+# We will also take advantage of the params.dff file.
+
+# Default settings, 3d w/ periodic boundary box, meaning that molecules clipping outside the box enter in through the other side.
+dimension 3
+boundary p p p
+
+# More default settings. LJ -> Unitless,
+units lj
+
+# atoms need a full pair style in order to use DRUDE oscillators. molecule with bonds, charge,
+atom_style full
+
+# Set pair style to LJ-cut with dipole interactions cutoff and lennard jones at 5.5. (Using parameters from Jiang. Et Al's paper)
+pair_style lj/cut/dipole/cut 5.5
+
+
+# System definition
+
+# 11 x 11 x 11 box
+region simulation_box block -5.5 5.5 -5.5 5.5 -5.5 5.5
+create_box 1 simulation_box
+Created orthogonal box = (-5.5 -5.5 -5.5) to (5.5 5.5 5.5)
+  1 by 1 by 1 MPI processor grid
+
+
+# Add atoms to the box
+create_atoms 1 random 900 69420 simulation_box
+Created 900 atoms
+  using lattice units in orthogonal box = (-5.5 -5.5 -5.5) to (5.5 5.5 5.5)
+  create_atoms CPU = 0.005 seconds
+pair_style lj/cut 2.5
+# Simulation Settings
+
+# Set mass
+mass 1 1.0
+pair_coeff	  1 1 1.0 1.0
+
+# Write the data to a file (we use nocoeff so that we can polarize properly)
+write_data non_polarizable.data nocoeff
+System init for write_data ...
+Generated 0 of 0 mixed pair_coeff terms from geometric mixing rule
+Neighbor list info ...
+  update: every = 1 steps, delay = 0 steps, check = yes
+  max neighbors/atom: 2000, page size: 100000
+  master list distance cutoff = 2.8
+  ghost atom cutoff = 2.8
+  binsize = 1.4, bins = 8 8 8
+  1 neighbor lists, perpetual/occasional/extra = 1 0 0
+  (1) pair lj/cut, perpetual
+      attributes: half, newton on
+      pair build: half/bin/newton
+      stencil: half/bin/3d
+      bin: standard
+Total wall time: 0:00:00

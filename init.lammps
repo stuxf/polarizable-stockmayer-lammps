@@ -1,4 +1,7 @@
-# Initialization Parameters
+# Initialize the non-polarizable data file 
+# This file will then be converted into a polarizable data file
+# It will be converted via polarizer.py, from DRUDE tools
+# We will also take advantage of the params.dff file.
 
 # Default settings, 3d w/ periodic boundary box, meaning that molecules clipping outside the box enter in through the other side.
 dimension 3
@@ -13,41 +16,22 @@ atom_style full
 # Set pair style to LJ-cut with dipole interactions cutoff and lennard jones at 5.5. (Using parameters from Jiang. Et Al's paper)
 pair_style lj/cut/dipole/cut 5.5 
 
+
 # System definition
 
 # 11 x 11 x 11 box
 region simulation_box block -5.5 5.5 -5.5 5.5 -5.5 5.5
 create_box 1 simulation_box
 
+
 # Add atoms to the box
 create_atoms 1 random 900 69420 simulation_box
-
+pair_style lj/cut 2.5
 # Simulation Settings
 
-# Set mass and diameter of spheres
-set type      1 mass 1.0
-# set type      1 diameter 1.0 
-# set type      1 charge 1.0
-# set type      1 dipole/random 4321 1.7494
-
-# pairs the atoms with itself
-# args are 1.0, 1.0. depends on pair_style
-# ^ args correspond to energy units, distance units
+# Set mass
+mass 1 1.0
 pair_coeff	  1 1 1.0 1.0 
 
-# add induced dipole
-fix 1 all qeq/point 1 10 1.0e-6 200 param.qeq1
-
-# prepare
-thermo 10
-thermo_style custom step temp pe ke etotal press
-minimize 1.0e-4 1.0e-6 1000 10000
-
-# visualizations
-thermo 50
-dump 1 all custom 100 dump.dipoleInit id type x y z q mux muy muz
-
-fix mynve all nve
-fix mylgv all langevin 1.0 1.0 0.1 1530917
-timestep 0.0001
-run 10000
+# Write the data to a file (we use nocoeff so that we can polarize properly)
+write_data non_polarizable.data nocoeff
