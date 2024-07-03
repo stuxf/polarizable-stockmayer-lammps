@@ -4,39 +4,34 @@
 dimension 3
 boundary p p p
 
-# More default settings. LJ -> Unitless, 
-units lj
+# Commands to include in the LAMMPS input script
 
-# atoms need a full pair style in order to use DRUDE oscillators. molecule with bonds, charge, 
-atom_style full
+# adapt the pair_style command as needed
+pair_style hybrid/overlay ... coul/long/cs 12.0 thole 2.600 12.0
 
-# Set pair style to LJ-cut with dipole interactions cutoff and lennard jones at 5.5. (Using parameters from Jiang. Et Al's paper)
-pair_style lj/cut/dipole/cut 5.5 
+# data file with Drude oscillators added
+read_data polarizeable.data
 
-# System definition
+# pair interactions with Drude particles written to file
+# Thole damping recommended if more than 1 Drude per molecule
+include pair-drude.lmp
 
-# 11 x 11 x 11 box
-region simulation_box block -5.5 5.5 -5.5 5.5 -5.5 5.5
-create_box 1 simulation_box
+# atom groups convenient for thermostats (see package documentation), etc.
+group ATOMS type 1
+group CORES type 1
+group DRUDES type 2
 
-# Add atoms to the box
-create_atoms 1 random 900 69420 simulation_box
+# flag for each atom type: [C]ore, [D]rude, [N]on-polarizable
+fix DRUDE all drude C D
 
-# Simulation Settings
-
-# Set mass and diameter of spheres
-set type      1 mass 1.0
-# set type      1 diameter 1.0 
-# set type      1 charge 1.0
-# set type      1 dipole/random 4321 1.7494
-
-# pairs the atoms with itself
-# args are 1.0, 1.0. depends on pair_style
-# ^ args correspond to energy units, distance units
-pair_coeff	  1 1 1.0 1.0 
-
-# add induced dipole
-fix 1 all qeq/point 1 10 1.0e-6 200 param.qeq1
+# ATTENTION!
+#  * read_data may need 'extra/special/per/atom' keyword, LAMMPS will exit with a message.
+#  * If using fix shake the group-ID must not include Drude particles.
+#    Use group ATOMS for example.
+#  * Give all I<=J pair interactions, no mixing.
+#  * Pair style coul/long/cs from CORESHELL package is used for interactions
+#    of Drude particles. Alternatively pair lj/cut/thole/long could be used,
+#    avoiding hybrid/overlay and allowing mixing. See doc pages.
 
 # prepare
 thermo 10
