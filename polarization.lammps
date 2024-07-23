@@ -70,8 +70,8 @@ fix MOMENTUM all momentum 100 linear 1 1 1
 timestep 0.001
 neigh_modify one 100000 page 1000000
 minimize 1.0e-4 1.0e-6 1000 10000
-dump DUMP all custom 10 dump.lammpstrj id mol type element x y z ix iy iz
-write_data minimized_coordinate.data
+# dump DUMP all custom 10 dump.lammpstrj id mol type element x y z ix iy iz
+# write_data minimized_coordinate.data
 
 echo both
 run 100000
