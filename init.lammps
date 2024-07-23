@@ -13,10 +13,6 @@ units lj
 # atoms need a full pair style in order to use DRUDE oscillators. molecule with bonds, charge, 
 atom_style full
 
-# Set pair style to LJ-cut with dipole interactions cutoff and lennard jones at 5.5. (Using parameters from Jiang. Et Al's paper)
-pair_style lj/cut/dipole/cut 5.5 
-
-
 # System definition
 
 # 11 x 11 x 11 box
@@ -34,7 +30,8 @@ mass 1 18.0
 pair_coeff	  1 1 1.0 1.0 
 
 # Write the data to a file (we use nocoeff so that we can polarize properly)
-
-minimize 1.0e-4 1.0e-6 1000 10000
+neighbor 3.0 bin
+neigh_modify delay 0 every 1 check yes
+minimize 1.0e-14 1.0e-16 1000 10000
 
 write_data non_polarizable_small.data nocoeff
