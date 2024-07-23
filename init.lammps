@@ -25,13 +25,16 @@ create_box 1 simulation_box
 
 
 # Add atoms to the box
-create_atoms 1 random 900 69420 simulation_box
+create_atoms 1 random 20 69420 simulation_box
 pair_style lj/cut 2.5
 # Simulation Settings
 
 # Set mass
-mass 1 1.0
+mass 1 18.0
 pair_coeff	  1 1 1.0 1.0 
 
 # Write the data to a file (we use nocoeff so that we can polarize properly)
-write_data non_polarizable.data nocoeff
+
+minimize 1.0e-4 1.0e-6 1000 10000
+
+write_data non_polarizable_small.data nocoeff

@@ -3,14 +3,19 @@
 # Default settings, 3d w/ periodic boundary box, meaning that molecules clipping outside the box enter in through the other side.
 dimension 3
 boundary p p p
+atom_style full
 
 # Commands to include in the LAMMPS input script
 
+# harmonic for drude oscillator
+bond_style harmonic
+
 # adapt the pair_style command as needed
-pair_style hybrid/overlay ... coul/long/cs 12.0 thole 2.600 12.0
+pair_style hybrid/overlay lj/cut/coul/long 5.5 thole 2.600 12.0
+kspace_style pppm 1.0e-4
 
 # data file with Drude oscillators added
-read_data polarizeable.data
+read_data polarizeable_small.data
 
 # pair interactions with Drude particles written to file
 # Thole damping recommended if more than 1 Drude per molecule
@@ -33,16 +38,33 @@ fix DRUDE all drude C D
 #    of Drude particles. Alternatively pair lj/cut/thole/long could be used,
 #    avoiding hybrid/overlay and allowing mixing. See doc pages.
 
-# prepare
-thermo 10
-thermo_style custom step temp pe ke etotal press
-minimize 1.0e-4 1.0e-6 1000 10000
+
+# more drude stuff
+fix LANG all langevin/drude 300. 100 12435 1. 20 13977
+comm_modify vel yes
+# fix SHAKE ATOMS shake 0.0001 20 0 t 4 5
+
+fix NVE all nve
+fix MOMENTUM all momentum 100 linear 1 1 1
+# fix mylgv all langevin 1.0 1.0 0.1 1530917
+
+# # langevin
+# fix DIRECT all drude/transform/direct
+# fix RIGID ATOMS rigid/nvt/small molecule temp 300. 300. 100
+# fix NVT DRUDES nvt temp 1. 1. 20
+# fix INVERSE all drude/transform/inverse
 
 # visualizations
-thermo 50
-dump 1 all custom 100 dump.dipoleInit id type x y z q mux muy muz
-
-fix mynve all nve
-fix mylgv all langevin 1.0 1.0 0.1 1530917
+# neigh_modify one 100000 page 1000000
 timestep 0.0001
+minimize 1.0e-4 1.0e-6 1000 10000
+dump DUMP all custom 10 dump.lammpstrj id mol type element x y z ix iy iz
+write_data minimized_coordinate.data
+
+
+neighbor 2.0 bin
+
+timestep 0.02
 run 10000
+
+write_data minimized_coordinate.data
