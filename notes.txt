@@ -1,4 +1,14 @@
-Next steps:
+Next Steps:
+
+Seems like params might be off;
+
+Set thermostatted reduced temperature to be ~= 1, set thermostatted DC-DP pairs to be ~=0.01
+
+1931 Review, A = 4 episslon 
+
+Exam `params.dff`
+
+
 
 Calculate dielectric constant from this:
 

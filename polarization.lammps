@@ -33,7 +33,7 @@ fix DRUDE all drude C D
 
 # Now for the thermalization, the simplest choice is to use the fix langevin/drude.
 
-fix LANG all langevin/drude 300. 100 12435 1. 20 13977
+fix LANG all langevin/drude 1. 100 12435 0.003. 20 13977
 
 # This applies a Langevin thermostat at temperature 300. to the centers of mass of the 
 # DC-DP pairs, with relaxation time 100 and with random seed 12345. This fix applies also 
