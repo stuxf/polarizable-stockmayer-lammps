@@ -1,6 +1,7 @@
 import sys
 import random
 from copy import deepcopy
+import numpy as np
 
 # Atom data looks like this
 
@@ -284,6 +285,97 @@ kcal = 4.184  # kJ
 eV = 96.485  # kJ/mol
 fpe0 = 0.000719756  # (4 Pi eps0) in e^2/(kJ/mol A)
 
+import numpy as np
+import matplotlib.pyplot as plt
+
+def string_to_atom(line):
+    # Example string
+    # 581 0 1 C 1.7354 -5.05554 -4.70332 -4.74188
+    words = line.split()
+    return Atom(int(words[0]), int(words[1]), int(words[2]), words[3], float(words[4]), float(words[5]), float(words[6]), float(words[7]))
+
+class Atom(object):
+    # ATOMS id mol type element q xu yu zu
+    def __init__(self, id, mol, type, element, q, x, y, z):
+        self.id = id
+        self.mol = mol
+        self.type = type
+        self.element = element
+        self.q = q
+        self.x = x
+        self.y = y
+        self.z = z
+
+    def dipole(self):
+        return self.q * np.array([self.x, self.y, self.z])
+
+class Timestep(object):
+    def __init__(self, timestep, atoms):
+        self.timestep = timestep
+        self.atoms = atoms
+        self.dipole_moment, self.dipole_magnitude = self.dipole()
+
+    def dipole(self):
+        dipoles = np.array([atom.dipole() for atom in self.atoms])
+        dipole_moment = np.sum(dipoles, axis=0)
+        # return sum of dipoles and magnitude of sum
+        return dipole_moment, np.linalg.norm(dipole_moment)
+
+class Dump(object):
+    def __init__(self, datafile):
+        """Read LAMMPS dump file"""
+        self.timesteps = []
+        self.datafile = datafile
+        self.read_dump()
+
+    def read_dump(self):
+        # Dump file looks like this
+        # ITEM: TIMESTEP
+        # 100
+        # ITEM: NUMBER OF ATOMS
+        # 1800
+        # ITEM: BOX BOUNDS pp pp pp
+        # -5.5000000000000000e+00 5.5000000000000000e+00
+        # -5.5000000000000000e+00 5.5000000000000000e+00
+        # -5.5000000000000000e+00 5.5000000000000000e+00
+        # ITEM: ATOMS id mol type element q xu yu zu
+        # 581 0 1 C 1.7354 -5.05554 -4.70332 -4.74188
+        # 716 0 1 C 1.7354 -4.34815 -4.10895 -4.23278
+        # 91 0 1 C 1.7354 -3.81375 -3.53894 -3.51429
+        # ... more atoms
+        # repeat for each timestep
+        with open(self.datafile, 'r') as f:
+            while True:
+                # Read timestep
+                line = f.readline()
+                if not line:
+                    break  # End of file
+                if "ITEM: TIMESTEP" not in line:
+                    continue
+                
+                timestep = int(f.readline().strip())
+                
+                # Skip "ITEM: NUMBER OF ATOMS" line
+                f.readline()
+                num_atoms = int(f.readline().strip())
+                
+                # Skip "ITEM: BOX BOUNDS" and the three lines after it
+                for _ in range(4):
+                    f.readline()
+
+                # Skip "ITEM: ATOMS" line
+                f.readline()
+                
+                # Read atoms
+                atoms = []
+                for _ in range(num_atoms):
+                    line = f.readline().strip()
+                    atom = string_to_atom(line)
+                    atoms.append(atom)
+                
+                # Create Timestep object and add to list
+                self.timesteps.append(Timestep(timestep, atoms))
+
 
 def main():
     # open cool_stuff.data
@@ -303,42 +395,40 @@ def main():
         molecules[mol_id].add(bond["i"])
         molecules[mol_id].add(bond["j"])
 
-    # Calculate dipole for each molecule
-    for mol_id, atom_ids in molecules.items():
-        mol_dipole = [0, 0, 0]
-        for atom_id in atom_ids:
-            atom = next(atom for atom in data.atoms if atom["n"] == atom_id)
-            position = (atom["x"] + atom["xu"] * 11, atom["y"] + atom["yu"] * 11, atom["z"] + atom["zu"] * 11)
-            charge = atom["q"]
+    dump = Dump('dump-two.lammpstrj')
+    # write data to a file
+    with open('dipole_magnitude_vs_time.txt', 'w') as f:
+        for ts in dump.timesteps:
+            f.write(f"{ts.timestep} {ts.dipole_moment} {ts.dipole_magnitude}\n")
+    # graph dipole magnitude vs time using matplotlib
+    # Extract timesteps and dipole magnitudes
+    timesteps = [ts.timestep for ts in dump.timesteps]
+    dipole_magnitudes = [ts.dipole_magnitude for ts in dump.timesteps]
 
-            # Calculate the contribution of this atom to the molecule's dipole moment
-            dipole_contribution = [charge * coord for coord in position]
-            mol_dipole = [
-                total + contrib
-                for total, contrib in zip(mol_dipole, dipole_contribution)
-            ]
+    # Create the plot
+    plt.figure(figsize=(10, 6))
+    plt.plot(timesteps, dipole_magnitudes, '-o')
+    plt.title('Dipole Magnitude vs Time')
+    plt.xlabel('Timestep')
+    plt.ylabel('Dipole Magnitude')
+    plt.grid(True)
 
-        # Convert the molecule dipole to a tuple
-        mol_dipole = tuple(mol_dipole)
+    # Add some styling
+    plt.tight_layout()
+    
+    # Save the plot
+    plt.savefig('dipole_magnitude_vs_time.png')
 
-        if (sum([coord**2 for coord in mol_dipole]) > 100):
-            print(sum([coord**2 for coord in mol_dipole]))
-            print(mol_id, atom_ids)
-            continue
-        # Add to total dipole
-        total_dipole = [
-            total + contrib for total, contrib in zip(total_dipole, mol_dipole)
-        ]
+    print(timesteps, dipole_magnitudes)
+    
+    # Display the plot (comment this out if running on a server without display)
+    plt.show()
 
-    # Convert the total dipole to a tuple
-    total_dipole = tuple(total_dipole)
-
-    # Take the dot product with itself
-    dipole_squared = sum([coord**2 for coord in total_dipole])
-
-    # Print the result
-    print(f"Total dipole squared: {dipole_squared}")
+    # Print some statistics
+    print(f"Average dipole magnitude: {np.mean(dipole_magnitudes):.4f}")
+    print(f"Maximum dipole magnitude: {np.max(dipole_magnitudes):.4f}")
+    print(f"Minimum dipole magnitude: {np.min(dipole_magnitudes):.4f}")
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()

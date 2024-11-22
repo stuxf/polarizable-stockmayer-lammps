@@ -113,6 +113,8 @@ def main():
     
     # Save the plot
     plt.savefig('dipole_magnitude_vs_time.png')
+
+    print(timesteps, dipole_magnitudes)
     
     # Display the plot (comment this out if running on a server without display)
     plt.show()

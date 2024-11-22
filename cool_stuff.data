@@ -11,8 +11,8 @@ LAMMPS data file via write_data, version 2 Aug 2023, timestep = 100007, units = 
 
 Masses
 
-1 17.6
-2 0.4
+1 17.6 # DC
+2 0.4 # DP
 
 Pair Coeffs # lj/cut/coul/long/gpu
 

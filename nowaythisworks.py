@@ -284,61 +284,187 @@ kcal = 4.184  # kJ
 eV = 96.485  # kJ/mol
 fpe0 = 0.000719756  # (4 Pi eps0) in e^2/(kJ/mol A)
 
+import numpy as np
+import matplotlib.pyplot as plt
+
+class Box:
+    def __init__(self, box_bounds):
+        """
+        Initialize simulation box from bounds
+        box_bounds: list of [min, max] for each dimension
+        """
+        self.bounds = np.array(box_bounds)
+        self.lengths = self.bounds[:, 1] - self.bounds[:, 0]
+
+    def minimum_image(self, r1, r2):
+        """Apply minimum image convention"""
+        dr = r2 - r1
+        for i in range(3):
+            while dr[i] > self.lengths[i]/2:
+                dr[i] -= self.lengths[i]
+            while dr[i] < -self.lengths[i]/2:
+                dr[i] += self.lengths[i]
+        return dr
+
+class BondDipole:
+    def __init__(self, id1, id2, q1, q2, r1, r2):
+        self.id1 = id1
+        self.id2 = id2
+        self.q1 = q1
+        self.q2 = q2
+        self.r1 = np.array(r1)
+        self.r2 = np.array(r2)
+
+    def calculate_dipole(self, box):
+        """Calculate dipole moment considering PBC"""
+        dr = box.minimum_image(self.r1, self.r2)
+        # For Drude pairs, typically one is positive (core) and one is negative (particle)
+        # The dipole points from negative to positive
+        return self.q1 * dr  # Since q1 + q2 = 0, this is equivalent to q1*r1 + q2*r2
+
+class Timestep:
+    def __init__(self, timestep, box_bounds):
+        self.timestep = timestep
+        self.box = Box(box_bounds)
+        self.atoms = {}  # Dictionary mapping atom ID to properties
+        self.bond_dipoles = []
+        self.dipole_moment = None
+        self.dipole_magnitude = None
+
+    def add_atom(self, id, mol, type, q, x, y, z):
+        self.atoms[id] = {
+            'mol': mol,
+            'type': type,
+            'q': q,
+            'pos': np.array([x, y, z])
+        }
+
+    def process_bonds(self, bonds):
+        """Process bonds to create bond dipoles"""
+        self.bond_dipoles = []
+        for bond in bonds:
+            id1, id2 = bond['i'], bond['j']
+            if id1 in self.atoms and id2 in self.atoms:
+                atom1 = self.atoms[id1]
+                atom2 = self.atoms[id2]
+                bond_dipole = BondDipole(
+                    id1, id2,
+                    atom1['q'], atom2['q'],
+                    atom1['pos'], atom2['pos']
+                )
+                self.bond_dipoles.append(bond_dipole)
+
+    def calculate_total_dipole(self):
+        """Calculate total dipole moment from all bond dipoles"""
+        if not self.bond_dipoles:
+            return np.zeros(3), 0.0
+
+        total_dipole = np.zeros(3)
+        for bond_dipole in self.bond_dipoles:
+            total_dipole += bond_dipole.calculate_dipole(self.box)
+
+        self.dipole_moment = total_dipole
+        self.dipole_magnitude = np.linalg.norm(total_dipole)
+        return self.dipole_moment, self.dipole_magnitude
+
+class DumpAnalyzer:
+    def __init__(self, dump_file, data_file):
+        self.dump_file = dump_file
+        self.data = data_file
+        self.timesteps = []
+        self.bonds = data_file.bonds
+        self.read_dump()
+
+    def read_dump(self):
+        with open(self.dump_file, 'r') as f:
+            while True:
+                # Read timestep header
+                line = f.readline()
+                if not line:
+                    break
+
+                if "ITEM: TIMESTEP" not in line:
+                    continue
+
+                timestep_num = int(f.readline().strip())
+                
+                # Read number of atoms
+                f.readline()  # Skip "ITEM: NUMBER OF ATOMS"
+                num_atoms = int(f.readline().strip())
+
+                # Read box bounds
+                f.readline()  # Skip "ITEM: BOX BOUNDS"
+                box_bounds = []
+                for _ in range(3):
+                    lo, hi = map(float, f.readline().split())
+                    box_bounds.append([lo, hi])
+
+                # Create new timestep
+                ts = Timestep(timestep_num, box_bounds)
+
+                # Skip header line
+                f.readline()  # Skip "ITEM: ATOMS"
+
+                # Read atoms
+                for _ in range(num_atoms):
+                    tokens = f.readline().split()
+                    atom_id = int(tokens[0])
+                    mol_id = int(tokens[1])
+                    atom_type = int(tokens[2])
+                    q = float(tokens[4])
+                    x, y, z = map(float, tokens[5:8])
+                    ts.add_atom(atom_id, mol_id, atom_type, q, x, y, z)
+
+                # Process bonds and calculate dipoles
+                ts.process_bonds(self.bonds)
+                ts.calculate_total_dipole()
+                self.timesteps.append(ts)
+
+    def plot_dipole_analysis(self):
+        """Create plots of dipole evolution"""
+        timestamps = [ts.timestep for ts in self.timesteps]
+        magnitudes = [ts.dipole_magnitude for ts in self.timesteps]
+        components = np.array([ts.dipole_moment for ts in self.timesteps])
+
+        # Create figure with two subplots
+        fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 10))
+
+        # Plot total magnitude
+        ax1.plot(timestamps, magnitudes, '-o', label='Total magnitude')
+        ax1.set_xlabel('Timestep')
+        ax1.set_ylabel('Dipole magnitude')
+        ax1.grid(True)
+        ax1.legend()
+
+        # Plot components
+        ax2.plot(timestamps, components[:, 0], '-o', label='x')
+        ax2.plot(timestamps, components[:, 1], '-o', label='y')
+        ax2.plot(timestamps, components[:, 2], '-o', label='z')
+        ax2.set_xlabel('Timestep')
+        ax2.set_ylabel('Dipole components')
+        ax2.grid(True)
+        ax2.legend()
+
+        plt.tight_layout()
+        plt.savefig('dipole_analysis.png')
+        
+        # Calculate and print statistics
+        print("\nDipole Analysis Statistics:")
+        print(f"Average magnitude: {np.mean(magnitudes):.4f}")
+        print(f"Maximum magnitude: {np.max(magnitudes):.4f}")
+        print(f"Minimum magnitude: {np.min(magnitudes):.4f}")
+        print("\nComponent averages:")
+        print(f"X: {np.mean(components[:, 0]):.4f}")
+        print(f"Y: {np.mean(components[:, 1]):.4f}")
+        print(f"Z: {np.mean(components[:, 2]):.4f}")
 
 def main():
-    # open cool_stuff.data
+    # Initialize with both data and dump files
     data = Data("cooler_stuff.data")
-    # list the bonds
     data.extract_pol()
-    total_dipole = [0, 0, 0]
+    
+    analyzer = DumpAnalyzer('dump-two.lammpstrj', data)
+    analyzer.plot_dipole_analysis()
 
-    # Dictionary to store molecules
-    molecules = {}
-
-    # Group atoms into molecules based on bonds
-    for bond in data.bonds:
-        mol_id = bond["n"]
-        if mol_id not in molecules:
-            molecules[mol_id] = set()
-        molecules[mol_id].add(bond["i"])
-        molecules[mol_id].add(bond["j"])
-
-    # Calculate dipole for each molecule
-    for mol_id, atom_ids in molecules.items():
-        mol_dipole = [0, 0, 0]
-        for atom_id in atom_ids:
-            atom = next(atom for atom in data.atoms if atom["n"] == atom_id)
-            position = (atom["x"] + atom["xu"] * 11, atom["y"] + atom["yu"] * 11, atom["z"] + atom["zu"] * 11)
-            charge = atom["q"]
-
-            # Calculate the contribution of this atom to the molecule's dipole moment
-            dipole_contribution = [charge * coord for coord in position]
-            mol_dipole = [
-                total + contrib
-                for total, contrib in zip(mol_dipole, dipole_contribution)
-            ]
-
-        # Convert the molecule dipole to a tuple
-        mol_dipole = tuple(mol_dipole)
-
-        if (sum([coord**2 for coord in mol_dipole]) > 100):
-            print(sum([coord**2 for coord in mol_dipole]))
-            print(mol_id, atom_ids)
-            continue
-        # Add to total dipole
-        total_dipole = [
-            total + contrib for total, contrib in zip(total_dipole, mol_dipole)
-        ]
-
-    # Convert the total dipole to a tuple
-    total_dipole = tuple(total_dipole)
-
-    # Take the dot product with itself
-    dipole_squared = sum([coord**2 for coord in total_dipole])
-
-    # Print the result
-    print(f"Total dipole squared: {dipole_squared}")
-
-
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()
